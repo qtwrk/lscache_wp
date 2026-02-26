@@ -613,10 +613,63 @@ class Control extends Root {
 
 			if ( $is_same_redirect ) {
 				self::set_nocache( '301 to same url' );
+			} elseif ( $this->_should_nocache_redirect_for_drop_qs( $script_uri, $location, (int) $status ) ) {
+				self::set_nocache( '301 trailing slash redirect with drop qs' );
 			}
 		}
 
 		return $location;
+	}
+
+	/**
+	 * Avoid caching canonical trailing-slash redirects when Drop Query String is enabled.
+	 *
+	 * With dropped query keys, LSCache lookup can match the slash-redirect cache entry
+	 * built from a no-query request and lose query args on subsequent requests.
+	 *
+	 * @access private
+	 *
+	 * @param string $script_uri Source URL.
+	 * @param string $location   Redirect target URL.
+	 * @param int    $status     HTTP status code.
+	 * @return bool              True when this redirect should bypass cache.
+	 */
+	private function _should_nocache_redirect_for_drop_qs( $script_uri, $location, $status ) {
+		// Only care redirect responses.
+		if ( $status < 300 || $status >= 400 ) {
+			return false;
+		}
+
+		// Only needed when Drop Query String is enabled.
+		if ( empty( $this->conf( Base::O_CACHE_DROP_QS ) ) ) {
+			return false;
+		}
+
+		$src_scheme = wp_parse_url( $script_uri, PHP_URL_SCHEME );
+		$dst_scheme = wp_parse_url( $location, PHP_URL_SCHEME );
+		if ( $dst_scheme && $src_scheme !== $dst_scheme ) {
+			return false;
+		}
+
+		$src_host = wp_parse_url( $script_uri, PHP_URL_HOST );
+		$dst_host = wp_parse_url( $location, PHP_URL_HOST );
+		if ( $dst_host && $src_host !== $dst_host ) {
+			return false;
+		}
+
+		$src_path = wp_parse_url( $script_uri, PHP_URL_PATH );
+		$dst_path = wp_parse_url( $location, PHP_URL_PATH );
+		if ( ! is_string( $src_path ) || ! is_string( $dst_path ) ) {
+			return false;
+		}
+
+		// Only handle same path normalization where one side has trailing slash.
+		if ( $src_path === $dst_path || rtrim( $src_path, '/' ) !== rtrim( $dst_path, '/' ) ) {
+			return false;
+		}
+
+		self::debug( '301 trailing slash redirect with Drop Query String enabled' );
+		return true;
 	}
 
 	/**
