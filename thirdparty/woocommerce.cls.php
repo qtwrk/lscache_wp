@@ -537,6 +537,8 @@ class WooCommerce extends Base {
 			$term = get_term_by( 'slug', $GLOBALS['product_cat'], 'product_cat' );
 		} elseif ( isset( $GLOBALS['product_tag'] ) && is_string( $GLOBALS['product_tag'] ) ) {
 			$term = get_term_by( 'slug', $GLOBALS['product_tag'], 'product_tag' );
+		} elseif ( isset( $GLOBALS['product_brand'] ) && is_string( $GLOBALS['product_brand'] ) ) {
+			$term = get_term_by( 'slug', $GLOBALS['product_brand'], 'product_brand' );
 		} else {
 			$term = false;
 		}
@@ -871,10 +873,14 @@ class WooCommerce extends Base {
 			return;
 		}
 
-		$tags = wc_get_product_terms( $post_id, 'product_tag', [ 'fields' => 'ids' ] );
-		if ( ! empty( $tags ) ) {
-			foreach ( $tags as $tag ) {
-				do_action( 'litespeed_purge', self::CACHETAG_TERM . $tag );
+		foreach ( [ 'product_tag', 'product_brand' ] as $taxonomy ) {
+			$terms = wc_get_product_terms( $post_id, $taxonomy, [ 'fields' => 'ids' ] );
+			if ( is_wp_error( $terms ) || empty( $terms ) ) {
+				continue;
+			}
+
+			foreach ( $terms as $term_id ) {
+				do_action( 'litespeed_purge', self::CACHETAG_TERM . $term_id );
 			}
 		}
 	}
